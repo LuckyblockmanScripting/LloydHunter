@@ -3,7 +3,7 @@ import os
 import re
 import time
 from datetime import datetime, timezone
-from urllib.parse import quote_plus
+from urllib.parse import quote_plus, urlparse
 
 import requests
 from bs4 import BeautifulSoup
@@ -194,6 +194,197 @@ def calculate_score(text):
 
 
 # =========================
+# URL / OFFER VERIFICATION
+# =========================
+
+DEAD_PAGE_TERMS = [
+    "page not found",
+    "404",
+    "not found",
+    "listing has ended",
+    "item has ended",
+    "item is no longer available",
+    "no longer available",
+    "listing ended",
+    "this listing ended",
+    "this item has been removed",
+    "item removed",
+    "listing removed",
+    "sold out",
+    "out of stock",
+    "unavailable",
+]
+
+SEARCH_PAGE_TERMS = [
+    "search results",
+    "search results for",
+    "search products",
+    "browse products",
+    "category",
+    "categories",
+    "filter by",
+]
+
+
+def verify_offer(url):
+    """
+    Follow the URL and check whether it appears to lead
+    to an actual individual listing rather than a dead page
+    or generic search/category page.
+
+    Returns:
+        {
+            "valid": True/False,
+            "final_url": "...",
+            "reason": "..."
+        }
+    """
+
+    if not url:
+        return {
+            "valid": False,
+            "final_url": "",
+            "reason": "No URL",
+        }
+
+    try:
+        response = requests.get(
+            url,
+            headers=HEADERS,
+            timeout=20,
+            allow_redirects=True,
+        )
+
+        final_url = response.url
+
+        # HTTP errors.
+        if response.status_code >= 400:
+            return {
+                "valid": False,
+                "final_url": final_url,
+                "reason": f"HTTP {response.status_code}",
+            }
+
+        # Some sites redirect to a completely different
+        # homepage when a listing disappears.
+        original_domain = urlparse(url).netloc.lower()
+        final_domain = urlparse(final_url).netloc.lower()
+
+        if original_domain and final_domain:
+            original_domain = original_domain.replace(
+                "www.", ""
+            )
+            final_domain = final_domain.replace(
+                "www.", ""
+            )
+
+            # We allow redirects within the same domain.
+            # A different domain can still be valid, so we
+            # don't automatically reject it.
+            if original_domain != final_domain:
+                print(
+                    "Redirected to different domain:",
+                    final_url,
+                )
+
+        page_text = response.text.lower()
+
+        # Parse HTML.
+        soup = BeautifulSoup(
+            response.text,
+            "html.parser",
+        )
+
+        title = soup.title.get_text(
+            " ",
+            strip=True,
+        ).lower() if soup.title else ""
+
+        visible_text = soup.get_text(
+            " ",
+            strip=True,
+        ).lower()
+
+        combined_text = f"{title} {visible_text}"
+
+        # Check for obvious dead pages.
+        for term in DEAD_PAGE_TERMS:
+            if term in combined_text:
+                return {
+                    "valid": False,
+                    "final_url": final_url,
+                    "reason": f"Dead page: {term}",
+                }
+
+        # Check obvious search/category pages.
+        search_term_count = 0
+
+        for term in SEARCH_PAGE_TERMS:
+            if term in combined_text:
+                search_term_count += 1
+
+        # If several generic search/category indicators
+        # are present, this probably isn't an individual offer.
+        if search_term_count >= 2:
+            return {
+                "valid": False,
+                "final_url": final_url,
+                "reason": "Likely search/category page",
+            }
+
+        # Look for signals that this is an individual item.
+        offer_signals = [
+            "add to cart",
+            "buy now",
+            "buy it now",
+            "make offer",
+            "add to bag",
+            "add to basket",
+            "quantity",
+            "price",
+            "condition",
+            "seller",
+            "item number",
+            "listing",
+        ]
+
+        signal_count = 0
+
+        for signal in offer_signals:
+            if signal in combined_text:
+                signal_count += 1
+
+        # If we have no meaningful offer signals, don't
+        # confidently call it a real listing.
+        if signal_count < 2:
+            return {
+                "valid": False,
+                "final_url": final_url,
+                "reason": "No strong listing signals",
+            }
+
+        return {
+            "valid": True,
+            "final_url": final_url,
+            "reason": "Likely active listing",
+        }
+
+    except requests.RequestException as e:
+        return {
+            "valid": False,
+            "final_url": url,
+            "reason": f"Request error: {e}",
+        }
+
+    except Exception as e:
+        return {
+            "valid": False,
+            "final_url": url,
+            "reason": f"Verification error: {e}",
+        }
+
+
+# =========================
 # SEARCH
 # =========================
 
@@ -213,7 +404,9 @@ def search_duckduckgo(query):
         response.raise_for_status()
 
     except Exception as e:
-        print(f"Search failed for {query}: {e}")
+        print(
+            f"Search failed for {query}: {e}"
+        )
         return []
 
     soup = BeautifulSoup(
@@ -224,7 +417,11 @@ def search_duckduckgo(query):
     results = []
 
     for result in soup.select(".result"):
-        title_element = result.select_one(".result__a")
+
+        title_element = result.select_one(
+            ".result__a"
+        )
+
         snippet_element = result.select_one(
             ".result__snippet"
         )
@@ -250,7 +447,9 @@ def search_duckduckgo(query):
                 strip=True,
             )
 
-        combined_text = f"{title} {snippet}"
+        combined_text = (
+            f"{title} {snippet}"
+        )
 
         results.append({
             "title": title,
@@ -270,6 +469,7 @@ def search_duckduckgo(query):
 # =========================
 
 def main():
+
     print("===================================")
     print("        LLOYD DX HUNTER")
     print("===================================")
@@ -279,11 +479,17 @@ def main():
     seen_links = set()
 
     for phrase in SEARCH_PHRASES:
-        print(f"Searching: {phrase}")
 
-        results = search_duckduckgo(phrase)
+        print(
+            f"Searching: {phrase}"
+        )
+
+        results = search_duckduckgo(
+            phrase
+        )
 
         for result in results:
+
             link = result["link"]
 
             if not link:
@@ -294,6 +500,40 @@ def main():
 
             seen_links.add(link)
 
+            # =========================
+            # VERIFY OFFER
+            # =========================
+
+            print(
+                f"Checking offer: {link}"
+            )
+
+            verification = verify_offer(
+                link
+            )
+
+            if not verification["valid"]:
+
+                print(
+                    "Rejected:",
+                    verification["reason"],
+                )
+
+                continue
+
+            final_url = verification[
+                "final_url"
+            ]
+
+            print(
+                "Verified:",
+                final_url,
+            )
+
+            # =========================
+            # PRICE
+            # =========================
+
             price_info = parse_price(
                 result["text"]
             )
@@ -303,6 +543,7 @@ def main():
             price_pln = ""
 
             if price_info:
+
                 price, currency = price_info
 
                 converted = convert_to_pln(
@@ -319,10 +560,21 @@ def main():
             result["price"] = price
             result["currency"] = currency
             result["price_pln"] = price_pln
+            result["final_url"] = final_url
+            result["verification"] = (
+                verification["reason"]
+            )
 
             all_results.append(result)
 
+            # Don't hammer websites.
+            time.sleep(1)
+
         time.sleep(2)
+
+    # =========================
+    # SORT
+    # =========================
 
     all_results.sort(
         key=lambda x: (
@@ -356,7 +608,9 @@ def main():
             "Currency",
             "Approx PLN",
             "Score",
-            "Link",
+            "Original Link",
+            "Final Offer URL",
+            "Verification",
             "Snippet",
         ])
 
@@ -367,6 +621,7 @@ def main():
         )
 
         for result in all_results:
+
             writer.writerow([
                 timestamp,
                 result["title"],
@@ -375,12 +630,15 @@ def main():
                 result["price_pln"],
                 result["score"],
                 result["link"],
+                result["final_url"],
+                result["verification"],
                 result["snippet"],
             ])
 
     print()
     print(
-        f"Found {len(all_results)} unique results."
+        f"Verified {len(all_results)} "
+        "possible listings."
     )
 
     print(
@@ -394,6 +652,7 @@ def main():
     deals = []
 
     for result in all_results:
+
         price_pln = result["price_pln"]
 
         if not isinstance(
@@ -415,18 +674,21 @@ def main():
     # =========================
 
     if not deals:
+
         print()
         print(
-            f"No possible deals under "
+            f"No verified deals under "
             f"{MAX_PRICE_PLN} PLN found."
         )
 
     else:
+
         print()
-        print("🔥 POSSIBLE DEALS")
-        print("=================")
+        print("🔥 VERIFIED POSSIBLE DEALS")
+        print("==========================")
 
         for deal in deals:
+
             print()
             print(deal["title"])
 
@@ -440,19 +702,26 @@ def main():
                 f"Score: {deal['score']}"
             )
 
-            print(deal["link"])
+            print(
+                f"Offer: {deal['final_url']}"
+            )
 
     # =========================
     # TELEGRAM
     # =========================
 
     if deals:
+
         message_lines = [
-            "🔥 LLOYD DX DEAL FOUND!",
+            "🔥 VERIFIED LLOYD DX DEAL!",
+            "",
+            "The hunter found a page that "
+            "appears to be an actual listing.",
             "",
         ]
 
         for deal in deals[:5]:
+
             message_lines.append(
                 f"💰 {deal['price']} "
                 f"{deal['currency']} "
@@ -468,7 +737,7 @@ def main():
             )
 
             message_lines.append(
-                f"🔗 {deal['link']}"
+                f"🔗 {deal['final_url']}"
             )
 
             message_lines.append("")
@@ -478,10 +747,10 @@ def main():
         )
 
     else:
+
         print()
         print(
-            "No Telegram alert sent because "
-            "no qualifying deal was found."
+            "No Telegram alert sent."
         )
 
 
