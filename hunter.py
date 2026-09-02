@@ -996,4 +996,8 @@ def save_csv(results):
                     "",
                 ),
                 "verification_reason": result.get(
+    "verification_reason",
+    "",
+),
+            }
                   
