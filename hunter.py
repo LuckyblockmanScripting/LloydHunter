@@ -13,6 +13,8 @@ MAX_PRICE_PLN = 1000
 TIMEOUT = 20
 DELAY = 2
 
+SITE_URL = "https://luckyblockmanscripting.github.io/LloydHunter/"
+
 HEADERS = {
     "User-Agent": (
         "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
@@ -164,6 +166,145 @@ def send_telegram(message):
         return False
 
 
+def process_telegram_commands():
+    token = os.getenv("TELEGRAM_BOT_TOKEN")
+    allowed_chat_id = os.getenv("TELEGRAM_CHAT_ID")
+
+    if not token or not allowed_chat_id:
+        print(
+            "Telegram command listener skipped: "
+            "secrets missing."
+        )
+        return
+
+    offset = 0
+
+    if os.path.exists("telegram_offset.txt"):
+        try:
+            with open(
+                "telegram_offset.txt",
+                "r",
+                encoding="utf-8",
+            ) as file:
+                offset = int(
+                    file.read().strip()
+                )
+
+        except (ValueError, OSError):
+            offset = 0
+
+    url = (
+        f"https://api.telegram.org/bot"
+        f"{token}/getUpdates"
+    )
+
+    try:
+        response = requests.get(
+            url,
+            params={
+                "offset": offset,
+                "timeout": 1,
+                "allowed_updates": '["message"]',
+            },
+            timeout=TIMEOUT,
+        )
+
+        if response.status_code != 200:
+            print(
+                "Telegram getUpdates error:",
+                response.status_code,
+            )
+            return
+
+        data = response.json()
+
+        if not data.get("ok"):
+            print(
+                "Telegram getUpdates returned an error."
+            )
+            return
+
+        updates = data.get(
+            "result",
+            [],
+        )
+
+        if not updates:
+            print("No Telegram commands.")
+            return
+
+        highest_update_id = offset - 1
+
+        for update in updates:
+
+            update_id = update.get(
+                "update_id",
+                -1,
+            )
+
+            if update_id > highest_update_id:
+                highest_update_id = update_id
+
+            message = update.get(
+                "message"
+            )
+
+            if not message:
+                continue
+
+            chat = message.get(
+                "chat",
+                {},
+            )
+
+            chat_id = str(
+                chat.get(
+                    "id",
+                    "",
+                )
+            )
+
+            if chat_id != str(
+                allowed_chat_id
+            ):
+                continue
+
+            text = str(
+                message.get(
+                    "text",
+                    "",
+                )
+            ).strip().lower()
+
+            if text.startswith("/site"):
+
+                send_telegram(
+                    "🌐 Lloyd Hunter website\n\n"
+                    "All checked listings, "
+                    "filters, prices and statuses:\n\n"
+                    f"{SITE_URL}"
+                )
+
+        new_offset = (
+            highest_update_id + 1
+        )
+
+        with open(
+            "telegram_offset.txt",
+            "w",
+            encoding="utf-8",
+        ) as file:
+            file.write(
+                str(new_offset)
+            )
+
+    except requests.RequestException as exc:
+        print(
+            "Telegram command error:",
+            exc,
+        )
+
+
 def clean_url(url):
     if not url:
         return None
@@ -173,7 +314,11 @@ def clean_url(url):
     if url.startswith("//"):
         url = "https:" + url
 
-    if not url.startswith("http://") and not url.startswith("https://"):
+    if not url.startswith(
+        "http://"
+    ) and not url.startswith(
+        "https://"
+    ):
         return None
 
     return url
@@ -184,39 +329,99 @@ def get_price(text):
         return None
 
     patterns = [
-        ("PLN", r"([0-9][0-9\s.,]*)\s*(?:PLN|zł)"),
-        ("EUR", r"(?:€|EUR)\s*([0-9][0-9\s.,]*)"),
-        ("EUR", r"([0-9][0-9\s.,]*)\s*(?:€|EUR)"),
-        ("USD", r"(?:\$|USD)\s*([0-9][0-9\s.,]*)"),
-        ("GBP", r"(?:£|GBP)\s*([0-9][0-9\s.,]*)"),
-        ("CAD", r"(?:CAD)\s*([0-9][0-9\s.,]*)"),
-        ("AUD", r"(?:AUD)\s*([0-9][0-9\s.,]*)"),
+        (
+            "PLN",
+            r"([0-9][0-9\s.,]*)\s*(?:PLN|zł)",
+        ),
+        (
+            "EUR",
+            r"(?:€|EUR)\s*([0-9][0-9\s.,]*)",
+        ),
+        (
+            "EUR",
+            r"([0-9][0-9\s.,]*)\s*(?:€|EUR)",
+        ),
+        (
+            "USD",
+            r"(?:\$|USD)\s*([0-9][0-9\s.,]*)",
+        ),
+        (
+            "GBP",
+            r"(?:£|GBP)\s*([0-9][0-9\s.,]*)",
+        ),
+        (
+            "CAD",
+            r"(?:CAD)\s*([0-9][0-9\s.,]*)",
+        ),
+        (
+            "AUD",
+            r"(?:AUD)\s*([0-9][0-9\s.,]*)",
+        ),
     ]
 
     for currency, pattern in patterns:
-        matches = re.findall(pattern, text)
+
+        matches = re.findall(
+            pattern,
+            text,
+        )
 
         for match in matches:
-            value = match.replace(" ", "")
-            value = value.replace("\xa0", "")
 
-            if "," in value and "." in value:
-                if value.rfind(",") > value.rfind("."):
-                    value = value.replace(".", "")
-                    value = value.replace(",", ".")
+            value = match.replace(
+                " ",
+                "",
+            )
+
+            value = value.replace(
+                "\xa0",
+                "",
+            )
+
+            if (
+                "," in value
+                and "." in value
+            ):
+                if (
+                    value.rfind(",")
+                    >
+                    value.rfind(".")
+                ):
+                    value = value.replace(
+                        ".",
+                        "",
+                    )
+
+                    value = value.replace(
+                        ",",
+                        ".",
+                    )
+
                 else:
-                    value = value.replace(",", "")
+                    value = value.replace(
+                        ",",
+                        "",
+                    )
 
             elif "," in value:
+
                 parts = value.split(",")
 
                 if len(parts[-1]) == 2:
-                    value = value.replace(",", ".")
+                    value = value.replace(
+                        ",",
+                        ".",
+                    )
+
                 else:
-                    value = value.replace(",", "")
+                    value = value.replace(
+                        ",",
+                        "",
+                    )
 
             try:
                 number = float(value)
+
             except ValueError:
                 continue
 
@@ -237,10 +442,12 @@ def score_listing(title):
     score = 0
 
     for word, points in POSITIVE.items():
+
         if word in text:
             score += points
 
     for word, points in NEGATIVE.items():
+
         if word in text:
             score += points
 
@@ -248,7 +455,10 @@ def score_listing(title):
 
 
 def search_ebay(query):
-    print("[eBay]", query)
+    print(
+        "[eBay]",
+        query,
+    )
 
     url = (
         "https://www.ebay.com/sch/i.html"
@@ -263,7 +473,10 @@ def search_ebay(query):
         )
 
         if response.status_code >= 400:
-            print("eBay HTTP", response.status_code)
+            print(
+                "eBay HTTP",
+                response.status_code,
+            )
             return []
 
         soup = BeautifulSoup(
@@ -273,15 +486,28 @@ def search_ebay(query):
 
         results = []
 
-        for item in soup.select("li.s-item"):
-            link = item.select_one("a.s-item__link")
-            title = item.select_one(".s-item__title")
-            price = item.select_one(".s-item__price")
+        for item in soup.select(
+            "li.s-item"
+        ):
+
+            link = item.select_one(
+                "a.s-item__link"
+            )
+
+            title = item.select_one(
+                ".s-item__title"
+            )
+
+            price = item.select_one(
+                ".s-item__price"
+            )
 
             if not link or not title:
                 continue
 
-            href = clean_url(link.get("href"))
+            href = clean_url(
+                link.get("href")
+            )
 
             if not href:
                 continue
@@ -311,12 +537,18 @@ def search_ebay(query):
         return results
 
     except requests.RequestException as exc:
-        print("eBay error:", exc)
+        print(
+            "eBay error:",
+            exc,
+        )
         return []
 
 
 def search_olx(query):
-    print("[OLX]", query)
+    print(
+        "[OLX]",
+        query,
+    )
 
     url = (
         "https://www.olx.pl/oferty/q-"
@@ -331,7 +563,10 @@ def search_olx(query):
         )
 
         if response.status_code >= 400:
-            print("OLX HTTP", response.status_code)
+            print(
+                "OLX HTTP",
+                response.status_code,
+            )
             return []
 
         soup = BeautifulSoup(
@@ -341,14 +576,25 @@ def search_olx(query):
 
         results = []
 
-        for link in soup.find_all("a", href=True):
-            href = link.get("href")
+        for link in soup.find_all(
+            "a",
+            href=True,
+        ):
+
+            href = link.get(
+                "href"
+            )
 
             if not href:
                 continue
 
-            if not href.startswith("http"):
-                href = "https://www.olx.pl" + href
+            if not href.startswith(
+                "http"
+            ):
+                href = (
+                    "https://www.olx.pl"
+                    + href
+                )
 
             if "/d/oferta/" not in href:
                 continue
@@ -373,12 +619,18 @@ def search_olx(query):
         return results
 
     except requests.RequestException as exc:
-        print("OLX error:", exc)
+        print(
+            "OLX error:",
+            exc,
+        )
         return []
 
 
 def search_vinted(query):
-    print("[Vinted]", query)
+    print(
+        "[Vinted]",
+        query,
+    )
 
     url = (
         "https://www.vinted.pl/catalog"
@@ -393,7 +645,10 @@ def search_vinted(query):
         )
 
         if response.status_code >= 400:
-            print("Vinted HTTP", response.status_code)
+            print(
+                "Vinted HTTP",
+                response.status_code,
+            )
             return []
 
         soup = BeautifulSoup(
@@ -403,14 +658,25 @@ def search_vinted(query):
 
         results = []
 
-        for link in soup.find_all("a", href=True):
-            href = link.get("href")
+        for link in soup.find_all(
+            "a",
+            href=True,
+        ):
+
+            href = link.get(
+                "href"
+            )
 
             if not href:
                 continue
 
-            if not href.startswith("http"):
-                href = "https://www.vinted.pl" + href
+            if not href.startswith(
+                "http"
+            ):
+                href = (
+                    "https://www.vinted.pl"
+                    + href
+                )
 
             if "/items/" not in href:
                 continue
@@ -435,23 +701,33 @@ def search_vinted(query):
         return results
 
     except requests.RequestException as exc:
-        print("Vinted error:", exc)
+        print(
+            "Vinted error:",
+            exc,
+        )
         return []
 
 
 def search_bricklink(query):
-    print("[BrickLink]", query)
+    print(
+        "[BrickLink]",
+        query,
+    )
 
     if query == "njo0108":
+
         url = (
             "https://www.bricklink.com/v2/catalog/"
             "catalogitem.page?M=njo0108"
         )
+
     elif query == "5004076":
+
         url = (
             "https://www.bricklink.com/v2/catalog/"
             "catalogitem.page?S=5004076-1"
         )
+
     else:
         return []
 
@@ -467,7 +743,10 @@ def search_bricklink(query):
 
 
 def search_duckduckgo(query):
-    print("[DuckDuckGo]", query)
+    print(
+        "[DuckDuckGo]",
+        query,
+    )
 
     url = (
         "https://html.duckduckgo.com/html/"
@@ -495,13 +774,20 @@ def search_duckduckgo(query):
 
         results = []
 
-        for item in soup.select(".result"):
-            link = item.select_one(".result__a")
+        for item in soup.select(
+            ".result"
+        ):
+
+            link = item.select_one(
+                ".result__a"
+            )
 
             if not link:
                 continue
 
-            href = link.get("href")
+            href = link.get(
+                "href"
+            )
 
             if not href:
                 continue
@@ -521,9 +807,11 @@ def search_duckduckgo(query):
             description = ""
 
             if snippet:
-                description = snippet.get_text(
-                    " ",
-                    strip=True,
+                description = (
+                    snippet.get_text(
+                        " ",
+                        strip=True,
+                    )
                 )
 
             results.append(
@@ -555,7 +843,11 @@ def verify(url):
         )
 
         if response.status_code >= 400:
-            return False, response.url, "HTTP error"
+            return (
+                False,
+                response.url,
+                "HTTP error",
+            )
 
         soup = BeautifulSoup(
             response.text,
@@ -575,15 +867,23 @@ def verify(url):
             strip=True,
         )
 
-        text = f"{title} {body}".lower()
+        text = (
+            f"{title} {body}"
+        ).lower()
 
         for word in DEAD_WORDS:
+
             if word in text:
-                return False, response.url, word
+                return (
+                    False,
+                    response.url,
+                    word,
+                )
 
         signals = 0
 
         for word in OFFER_WORDS:
+
             if word in text:
                 signals += 1
 
@@ -594,10 +894,19 @@ def verify(url):
                 "Not enough listing signals",
             )
 
-        return True, response.url, "Verified"
+        return (
+            True,
+            response.url,
+            "Verified",
+        )
 
     except requests.RequestException as exc:
-        return False, url, str(exc)
+
+        return (
+            False,
+            url,
+            str(exc),
+        )
 
 
 def save_csv(results):
@@ -618,7 +927,10 @@ def save_csv(results):
 
     existing = []
 
-    if os.path.exists("results.csv"):
+    if os.path.exists(
+        "results.csv"
+    ):
+
         try:
             with open(
                 "results.csv",
@@ -626,9 +938,11 @@ def save_csv(results):
                 encoding="utf-8",
                 newline="",
             ) as file:
+
                 existing = list(
                     csv.DictReader(file)
                 )
+
         except Exception:
             existing = []
 
@@ -637,6 +951,7 @@ def save_csv(results):
     rows = []
 
     for result in results:
+
         rows.append(
             {
                 "timestamp": timestamp,
@@ -681,252 +996,4 @@ def save_csv(results):
                     "",
                 ),
                 "verification_reason": result.get(
-                    "verification_reason",
-                    "",
-                ),
-            }
-        )
-
-    rows = existing + rows
-    rows = rows[-5000:]
-
-    with open(
-        "results.csv",
-        "w",
-        encoding="utf-8",
-        newline="",
-    ) as file:
-        writer = csv.DictWriter(
-            file,
-            fieldnames=fields,
-        )
-
-        writer.writeheader()
-        writer.writerows(rows)
-
-
-def main():
-    print("=" * 60)
-    print("LLOYD HUNTER")
-    print("=" * 60)
-
-    raw_results = []
-
-    for query in SEARCHES["eBay"]:
-        raw_results.extend(
-            search_ebay(query)
-        )
-        time.sleep(DELAY)
-
-    for query in SEARCHES["OLX"]:
-        raw_results.extend(
-            search_olx(query)
-        )
-        time.sleep(DELAY)
-
-    for query in SEARCHES["Vinted"]:
-        raw_results.extend(
-            search_vinted(query)
-        )
-        time.sleep(DELAY)
-
-    for query in SEARCHES["BrickLink"]:
-        raw_results.extend(
-            search_bricklink(query)
-        )
-        time.sleep(DELAY)
-
-    for query in SEARCHES["DuckDuckGo"]:
-        raw_results.extend(
-            search_duckduckgo(query)
-        )
-        time.sleep(DELAY)
-
-    print()
-    print(
-        "Raw results:",
-        len(raw_results),
-    )
-
-    results = []
-    seen = set()
-
-    for raw in raw_results:
-        url = clean_url(
-            raw.get("url")
-        )
-
-        if not url:
-            continue
-
-        if url in seen:
-            continue
-
-        seen.add(url)
-
-        title = raw.get(
-            "title",
-            "",
-        )
-
-        price_text = raw.get(
-            "price_text",
-            "",
-        )
-
-        price = get_price(
-            f"{title} {price_text}"
-        )
-
-        score = score_listing(title)
-
-        if price:
-            price_pln = price["pln"]
-
-            if price_pln <= 400 and score >= 60:
-                deal = "INSANE DEAL"
-            elif price_pln <= 600 and score >= 50:
-                deal = "GREAT DEAL"
-            elif price_pln <= 800 and score >= 45:
-                deal = "GOOD DEAL"
-            elif price_pln <= MAX_PRICE_PLN and score >= 35:
-                deal = "POSSIBLE DEAL"
-            else:
-                deal = "CHECK"
-        else:
-            price_pln = ""
-            deal = "NO PRICE"
-
-        result = {
-            "marketplace": raw.get(
-                "marketplace",
-                "Unknown",
-            ),
-            "title": title,
-            "url": url,
-            "final_url": url,
-            "currency": (
-                price["currency"]
-                if price
-                else ""
-            ),
-            "price": (
-                price["price"]
-                if price
-                else ""
-            ),
-            "price_pln": (
-                round(price_pln, 2)
-                if price
-                else ""
-            ),
-            "score": score,
-            "deal": deal,
-            "verified": False,
-            "verification_reason": "",
-        }
-
-        if raw.get("catalog_only"):
-            result["verification_reason"] = (
-                "BrickLink catalog page"
-            )
-        else:
-            print()
-            print(
-                "Checking:",
-                title[:80],
-            )
-
-            ok, final_url, reason = verify(url)
-
-            result["verified"] = ok
-            result["final_url"] = final_url
-            result["verification_reason"] = reason
-
-            if ok:
-                print("VERIFIED")
-            else:
-                print(
-                    "Rejected:",
-                    reason,
-                )
-
-        results.append(result)
-        time.sleep(DELAY)
-
-    save_csv(results)
-
-    alerts = 0
-
-    for result in results:
-        if not result["verified"]:
-            continue
-
-        if not result["price_pln"]:
-            continue
-
-        if float(result["price_pln"]) > MAX_PRICE_PLN:
-            continue
-
-        if result["score"] < 30:
-            continue
-
-        price_pln = float(
-            result["price_pln"]
-        )
-
-        if result["deal"] == "INSANE DEAL":
-            emoji = "🚨"
-        elif result["deal"] == "GREAT DEAL":
-            emoji = "🔥"
-        elif result["deal"] == "GOOD DEAL":
-            emoji = "🟢"
-        else:
-            emoji = "🟡"
-
-        message = (
-            f"{emoji} {price_pln:.2f} PLN — "
-            f"{result['deal']}\n\n"
-            f"📦 {result['title']}\n"
-            f"🌐 {result['marketplace']}\n"
-            f"⭐ Score: {result['score']}\n"
-            f"💰 Original price: "
-            f"{result['price']} "
-            f"{result['currency']}\n\n"
-            f"🔗 {result['final_url']}"
-        )
-
-        if send_telegram(message):
-            alerts += 1
-
-        time.sleep(1)
-
-    verified = sum(
-        1
-        for result in results
-        if result["verified"]
-    )
-
-    print()
-    print("=" * 60)
-    print("HUNT COMPLETE")
-    print("=" * 60)
-    print(
-        "Unique results:",
-        len(results),
-    )
-    print(
-        "Verified listings:",
-        verified,
-    )
-    print(
-        "Telegram alerts:",
-        alerts,
-    )
-    print(
-        "Saved to results.csv"
-    )
-
-
-if __name__ == "__main__":
-    main()
+                  
