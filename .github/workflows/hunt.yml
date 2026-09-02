@@ -16,12 +16,10 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
-
   hunt:
     runs-on: ubuntu-latest
 
     steps:
-
       - name: Get repository
         uses: actions/checkout@v4
         with:
@@ -44,23 +42,9 @@ jobs:
         run: |
           python hunter.py
 
-      - name: Save results and Telegram state
-        run: |
-          git config user.name "Lloyd Hunter"
-          git config user.email "actions@users.noreply.github.com"
-
-          git add results.csv telegram_offset.txt
-
-          if git diff --cached --quiet; then
-            echo "No new results or Telegram commands."
-          else
-            git commit -m "Update hunt results"
-            git pull --rebase origin main
-            git push origin main
-          fi
-
       - name: Prepare website data
         run: |
+          mkdir -p site
           cp results.csv site/results.csv
 
       - name: Configure GitHub Pages
@@ -75,7 +59,21 @@ jobs:
         id: deployment
         uses: actions/deploy-pages@v4
 
-      - name: Show website URL
+      - name: Save results
         run: |
-          echo "Lloyd Hunter website:"
-          echo "${{ steps.deployment.outputs.page_url }}"
+          git config user.name "Lloyd Hunter"
+          git config user.email "actions@users.noreply.github.com"
+
+          git add results.csv
+
+          if [ -f telegram_offset.txt ]; then
+            git add telegram_offset.txt
+          fi
+
+          if git diff --cached --quiet; then
+            echo "No changes to save."
+            exit 0
+          fi
+
+          git pull --rebase origin main
+          git push
