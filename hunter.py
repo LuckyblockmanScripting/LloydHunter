@@ -3,7 +3,7 @@ import os
 import re
 import time
 from datetime import datetime
-from urllib.parse import quote_plus, urlparse
+from urllib.parse import quote_plus
 
 import requests
 from bs4 import BeautifulSoup
@@ -782,17 +782,17 @@ def main():
 
         if price:
             price_pln = price["pln"]
-            deal = (
-                "INSANE DEAL"
-                if price_pln <= 400 and score >= 60
-                else "GREAT DEAL"
-                if price_pln <= 600 and score >= 50
-                else "GOOD DEAL"
-                if price_pln <= 800 and score >= 45
-                else "POSSIBLE DEAL"
-                if price_pln <= MAX_PRICE_PLN and score >= 35
-                else "CHECK"
-            )
+
+            if price_pln <= 400 and score >= 60:
+                deal = "INSANE DEAL"
+            elif price_pln <= 600 and score >= 50:
+                deal = "GREAT DEAL"
+            elif price_pln <= 800 and score >= 45:
+                deal = "GOOD DEAL"
+            elif price_pln <= MAX_PRICE_PLN and score >= 35:
+                deal = "POSSIBLE DEAL"
+            else:
+                deal = "CHECK"
         else:
             price_pln = ""
             deal = "NO PRICE"
@@ -830,7 +830,6 @@ def main():
             result["verification_reason"] = (
                 "BrickLink catalog page"
             )
-
         else:
             print()
             print(
@@ -838,9 +837,7 @@ def main():
                 title[:80],
             )
 
-            ok, final_url, reason = verify(
-                url
-            )
+            ok, final_url, reason = verify(url)
 
             result["verified"] = ok
             result["final_url"] = final_url
@@ -855,7 +852,6 @@ def main():
                 )
 
         results.append(result)
-
         time.sleep(DELAY)
 
     save_csv(results)
@@ -875,15 +871,28 @@ def main():
         if result["score"] < 30:
             continue
 
+        price_pln = float(
+            result["price_pln"]
+        )
+
+        if result["deal"] == "INSANE DEAL":
+            emoji = "🚨"
+        elif result["deal"] == "GREAT DEAL":
+            emoji = "🔥"
+        elif result["deal"] == "GOOD DEAL":
+            emoji = "🟢"
+        else:
+            emoji = "🟡"
+
         message = (
-            "🔥 VERIFIED LLOYD DX DEAL!\n\n"
-            f"🏷️ {result['deal']}\n"
-            f"💰 {result['price']} "
-            f"{result['currency']} "
-            f"≈ {result['price_pln']} PLN\n"
+            f"{emoji} {price_pln:.2f} PLN — "
+            f"{result['deal']}\n\n"
+            f"📦 {result['title']}\n"
+            f"🌐 {result['marketplace']}\n"
             f"⭐ Score: {result['score']}\n"
-            f"🌐 {result['marketplace']}\n\n"
-            f"📦 {result['title']}\n\n"
+            f"💰 Original price: "
+            f"{result['price']} "
+            f"{result['currency']}\n\n"
             f"🔗 {result['final_url']}"
         )
 
