@@ -1,0 +1,319 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta
+        name="viewport"
+        content="width=device-width, initial-scale=1.0"
+    >
+
+    <title>Lloyd Hunter</title>
+
+    <meta
+        name="description"
+        content="Lloyd DX Ninjago deal hunter listing dashboard."
+    >
+
+    <link
+        rel="stylesheet"
+        href="style.css"
+    >
+</head>
+
+<body>
+
+<header class="hero">
+
+    <div class="hero-content">
+
+        <div class="badge">
+            LEGO NINJAGO DEAL HUNTER
+        </div>
+
+        <h1>
+            Lloyd Hunter
+        </h1>
+
+        <p>
+            Tracking rare Lloyd DX listings across marketplaces.
+        </p>
+
+        <div class="target">
+            Target:
+            <strong>njo0108 / 5004076</strong>
+            · Budget:
+            <strong>1,000 PLN</strong>
+        </div>
+
+    </div>
+
+</header>
+
+
+<main class="container">
+
+    <section class="stats">
+
+        <div class="stat-card">
+            <span class="stat-label">
+                Listings
+            </span>
+
+            <strong id="totalListings">
+                0
+            </strong>
+        </div>
+
+        <div class="stat-card">
+            <span class="stat-label">
+                Verified
+            </span>
+
+            <strong id="verifiedListings">
+                0
+            </strong>
+        </div>
+
+        <div class="stat-card deal-stat">
+            <span class="stat-label">
+                Deals
+            </span>
+
+            <strong id="dealListings">
+                0
+            </strong>
+        </div>
+
+        <div class="stat-card">
+            <span class="stat-label">
+                Under 1,000 PLN
+            </span>
+
+            <strong id="underBudget">
+                0
+            </strong>
+        </div>
+
+    </section>
+
+
+    <section class="controls">
+
+        <div class="control">
+
+            <label for="search">
+                Search
+            </label>
+
+            <input
+                id="search"
+                type="search"
+                placeholder="njo0108, Lloyd DX, Ninjago..."
+            >
+
+        </div>
+
+
+        <div class="control">
+
+            <label for="marketplace">
+                Marketplace
+            </label>
+
+            <select id="marketplace">
+
+                <option value="all">
+                    All marketplaces
+                </option>
+
+            </select>
+
+        </div>
+
+
+        <div class="control">
+
+            <label for="status">
+                Status
+            </label>
+
+            <select id="status">
+
+                <option value="all">
+                    All
+                </option>
+
+                <option value="verified">
+                    Verified
+                </option>
+
+                <option value="rejected">
+                    Rejected
+                </option>
+
+            </select>
+
+        </div>
+
+
+        <div class="control">
+
+            <label for="price">
+                Maximum price
+            </label>
+
+            <select id="price">
+
+                <option value="all">
+                    Any price
+                </option>
+
+                <option value="400">
+                    400 PLN
+                </option>
+
+                <option value="600">
+                    600 PLN
+                </option>
+
+                <option value="800">
+                    800 PLN
+                </option>
+
+                <option value="1000">
+                    1,000 PLN
+                </option>
+
+            </select>
+
+        </div>
+
+
+        <div class="control">
+
+            <label for="sort">
+                Sort
+            </label>
+
+            <select id="sort">
+
+                <option value="newest">
+                    Newest
+                </option>
+
+                <option value="score">
+                    Highest score
+                </option>
+
+                <option value="price-low">
+                    Lowest price
+                </option>
+
+                <option value="price-high">
+                    Highest price
+                </option>
+
+            </select>
+
+        </div>
+
+    </section>
+
+
+    <section class="results-header">
+
+        <div>
+
+            <h2>
+                Listings
+            </h2>
+
+            <span id="resultCount">
+                Loading...
+            </span>
+
+        </div>
+
+        <div id="lastUpdated">
+        </div>
+
+    </section>
+
+
+    <section id="loading" class="loading">
+
+        <div class="spinner"></div>
+
+        <p>
+            Loading hunt results...
+        </p>
+
+    </section>
+
+
+    <section
+        id="error"
+        class="error"
+        hidden
+    >
+
+        <h2>
+            Could not load results
+        </h2>
+
+        <p id="errorMessage">
+        </p>
+
+    </section>
+
+
+    <section
+        id="empty"
+        class="empty"
+        hidden
+    >
+
+        <h2>
+            No listings found
+        </h2>
+
+        <p>
+            Try changing your filters.
+        </p>
+
+    </section>
+
+
+    <section
+        id="listings"
+        class="listings"
+    >
+    </section>
+
+
+    <div
+        id="pagination"
+        class="pagination"
+    >
+    </div>
+
+</main>
+
+
+<footer>
+
+    <p>
+        Lloyd Hunter · Automated rare LEGO Ninjago deal tracking
+    </p>
+
+    <p>
+        Results are automatically generated by GitHub Actions.
+    </p>
+
+</footer>
+
+
+<script src="app.js"></script>
+
+</body>
+</html>
