@@ -8,16 +8,20 @@ on:
 
 permissions:
   contents: write
+  pages: write
+  id-token: write
 
 concurrency:
   group: lloyd-hunter
   cancel-in-progress: false
 
 jobs:
+
   hunt:
     runs-on: ubuntu-latest
 
     steps:
+
       - name: Get repository
         uses: actions/checkout@v4
         with:
@@ -49,11 +53,29 @@ jobs:
 
           if git diff --cached --quiet; then
             echo "No new results to save."
-            exit 0
+          else
+            git commit -m "Update hunt results"
+            git pull --rebase origin main
+            git push origin main
           fi
 
-          git commit -m "Update hunt results"
+      - name: Prepare website data
+        run: |
+          cp results.csv site/results.csv
 
-          git pull --rebase origin main
+      - name: Configure GitHub Pages
+        uses: actions/configure-pages@v5
 
-          git push origin main
+      - name: Upload website
+        uses: actions/upload-pages-artifact@v4
+        with:
+          path: "./site"
+
+      - name: Deploy website
+        id: deployment
+        uses: actions/deploy-pages@v4
+
+      - name: Show website URL
+        run: |
+          echo "Lloyd Hunter website:"
+          echo "${{ steps.deployment.outputs.page_url }}"
