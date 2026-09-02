@@ -9,7 +9,7 @@ import requests
 from bs4 import BeautifulSoup
 
 
-MAX_PRICE_PLN = 1000
+MAX_PRICE_PLN = 3000
 TIMEOUT = 20
 DELAY = 2
 
