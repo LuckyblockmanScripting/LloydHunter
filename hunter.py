@@ -25,7 +25,7 @@ SEARCH_PHRASES = [
     '"Loyd" Ninjago minifigure',
     '"Lloid" Ninjago minifigure',
     '"Ninjago" minifigure lot Lloyd',
-    '"Ninjago" figures lot",
+    '"Ninjago" figures lot',
 ]
 
 CURRENCY_TO_PLN = {
@@ -134,11 +134,9 @@ def normalize_url(url):
     url = url.strip()
     url = url.replace("&amp;", "&")
 
-    # DuckDuckGo sometimes returns URLs beginning with //.
     if url.startswith("//"):
         url = "https:" + url
 
-    # Relative URLs.
     elif url.startswith("/"):
         url = urljoin("https://duckduckgo.com", url)
 
@@ -146,7 +144,6 @@ def normalize_url(url):
         parsed = urlsplit(url)
         query = parse_qs(parsed.query)
 
-        # DuckDuckGo uses "uddg" for the real destination.
         if "uddg" in query and query["uddg"]:
             destination = unquote(query["uddg"][0]).strip()
 
@@ -237,19 +234,42 @@ def extract_price(text):
     text = text.replace("\xa0", " ")
 
     patterns = [
-        (r"(?<!\w)(\d{1,6}(?:[.,]\d{1,2})?)\s*(?:PLN|zł|zl)\b", "PLN"),
-
-        (r"(?<!\w)(\d{1,6}(?:[.,]\d{1,2})?)\s*(?:EUR|€)\b", "EUR"),
-        (r"€\s*(\d{1,6}(?:[.,]\d{1,2})?)", "EUR"),
-
-        (r"(?<!\w)(\d{1,6}(?:[.,]\d{1,2})?)\s*(?:USD)\b", "USD"),
-        (r"\$\s*(\d{1,6}(?:[.,]\d{1,2})?)", "USD"),
-
-        (r"(?<!\w)(\d{1,6}(?:[.,]\d{1,2})?)\s*(?:GBP|£)\b", "GBP"),
-        (r"£\s*(\d{1,6}(?:[.,]\d{1,2})?)", "GBP"),
-
-        (r"(?<!\w)(\d{1,6}(?:[.,]\d{1,2})?)\s*(?:CAD)\b", "CAD"),
-        (r"C\$\s*(\d{1,6}(?:[.,]\d{1,2})?)", "CAD"),
+        (
+            r"(?<!\w)(\d{1,6}(?:[.,]\d{1,2})?)\s*(?:PLN|zł|zl)\b",
+            "PLN",
+        ),
+        (
+            r"(?<!\w)(\d{1,6}(?:[.,]\d{1,2})?)\s*(?:EUR|€)\b",
+            "EUR",
+        ),
+        (
+            r"€\s*(\d{1,6}(?:[.,]\d{1,2})?)",
+            "EUR",
+        ),
+        (
+            r"(?<!\w)(\d{1,6}(?:[.,]\d{1,2})?)\s*(?:USD)\b",
+            "USD",
+        ),
+        (
+            r"\$\s*(\d{1,6}(?:[.,]\d{1,2})?)",
+            "USD",
+        ),
+        (
+            r"(?<!\w)(\d{1,6}(?:[.,]\d{1,2})?)\s*(?:GBP|£)\b",
+            "GBP",
+        ),
+        (
+            r"£\s*(\d{1,6}(?:[.,]\d{1,2})?)",
+            "GBP",
+        ),
+        (
+            r"(?<!\w)(\d{1,6}(?:[.,]\d{1,2})?)\s*(?:CAD)\b",
+            "CAD",
+        ),
+        (
+            r"C\$\s*(\d{1,6}(?:[.,]\d{1,2})?)",
+            "CAD",
+        ),
     ]
 
     for pattern, currency in patterns:
@@ -386,10 +406,6 @@ def verify_offer(url):
     page_text = soup.get_text(" ", strip=True)
     page_text_lower = page_text.lower()
 
-    # --------------------------------------------------------
-    # Dead listing check
-    # --------------------------------------------------------
-
     for term in DEAD_PAGE_TERMS:
         if term in page_text_lower:
             return {
@@ -399,10 +415,6 @@ def verify_offer(url):
                 "page_text": page_text,
                 "title": title,
             }
-
-    # --------------------------------------------------------
-    # Search/category page check
-    # --------------------------------------------------------
 
     search_indicator_count = 0
 
@@ -418,10 +430,6 @@ def verify_offer(url):
             "page_text": page_text,
             "title": title,
         }
-
-    # --------------------------------------------------------
-    # Offer signal check
-    # --------------------------------------------------------
 
     offer_signal_count = 0
 
@@ -552,7 +560,6 @@ def main():
             if not url:
                 continue
 
-            # Prevent the same listing appearing multiple times.
             if url in seen_urls:
                 continue
 
@@ -563,18 +570,10 @@ def main():
 
             combined_text = f"{title} {snippet}"
 
-            # ------------------------------------------------
-            # Basic relevance check
-            # ------------------------------------------------
-
             score = calculate_score(combined_text)
 
             if score <= 0:
                 continue
-
-            # ------------------------------------------------
-            # Price extraction
-            # ------------------------------------------------
 
             amount, currency = extract_price(combined_text)
 
@@ -582,13 +581,14 @@ def main():
                 print(f"Skipped — no recognizable price: {title}")
                 continue
 
-            price_pln = convert_to_pln(amount, currency)
+            price_pln = convert_to_pln(
+                amount,
+                currency,
+            )
 
             if price_pln is None:
                 continue
 
-            # Don't waste verification requests on obviously
-            # over-budget results.
             if price_pln > MAX_PRICE_PLN:
                 continue
 
@@ -604,10 +604,6 @@ def main():
             print(f"Score: {score}")
             print(f"URL: {url}")
 
-            # ------------------------------------------------
-            # Verify actual listing
-            # ------------------------------------------------
-
             verification = verify_offer(url)
 
             if not verification["valid"]:
@@ -618,11 +614,6 @@ def main():
                 continue
 
             final_url = verification["final_url"]
-
-            # ------------------------------------------------
-            # Re-score using actual page
-            # ------------------------------------------------
-
             page_text = verification["page_text"]
 
             page_score = calculate_score(
@@ -631,10 +622,6 @@ def main():
 
             if page_score > score:
                 score = page_score
-
-            # ------------------------------------------------
-            # Try to find a better price on actual page
-            # ------------------------------------------------
 
             page_amount, page_currency = extract_price(
                 page_text[:50000]
@@ -651,20 +638,12 @@ def main():
                     currency = page_currency
                     price_pln = page_price_pln
 
-            # ------------------------------------------------
-            # Final budget check
-            # ------------------------------------------------
-
             if price_pln > MAX_PRICE_PLN:
                 print(
                     "Rejected after page check: "
                     f"{price_pln:.2f} PLN is over budget."
                 )
                 continue
-
-            # ------------------------------------------------
-            # Save verified result
-            # ------------------------------------------------
 
             result = {
                 "timestamp": datetime.now(timezone.utc).isoformat(),
@@ -682,10 +661,6 @@ def main():
 
             all_results.append(result)
 
-            # ------------------------------------------------
-            # Telegram alert
-            # ------------------------------------------------
-
             message = (
                 "🔥 VERIFIED LLOYD DX DEAL!\n\n"
                 f"💰 {amount:.2f} {currency} "
@@ -701,10 +676,6 @@ def main():
             print("✅ VERIFIED DEAL FOUND!")
 
             time.sleep(1)
-
-    # --------------------------------------------------------
-    # Save results
-    # --------------------------------------------------------
 
     save_results(all_results)
 
