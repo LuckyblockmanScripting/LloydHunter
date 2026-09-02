@@ -978,3 +978,4 @@ def process_telegram_commands():
 
         highest_update_id = max(
             highest_update_id,
+        )
