@@ -64,7 +64,7 @@ EBAY_SEARCHES = [
     "5004076",
     '"Lloyd DX" Ninjago',
     '"Lloyd Ninjago" minifigure',
-    '"Lloyd" "DX" LEGO minifigure",
+    '"Lloyd" "DX" LEGO minifigure',
 ]
 
 
